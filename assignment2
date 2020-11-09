@@ -1,0 +1,166 @@
+
+
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+GMs = 4*(np.pi)**2  #AU^3/yr^2, Sun
+wy_vec = np.array([2*np.pi, 0])#y-direction, initial condition, speed, position
+wx_vec = np.array([0,1]) #x-direction, initial condition, speed, position'
+t_min = 0 #in AU
+t_max = 2
+h = 0.002
+velocity = np.sqrt(GMs/1.52) #initial velocity for Mars
+vx_vec=np.array([0,1.52]) #1.52 is radi in AU of the Orbit, initial velocity in x-direction is 0
+vy_vec=np.array([velocity,0])
+
+ratio_earth_sun = 3*10**(-6)
+ratio_mars_sun = 3.3*10**(-7)
+
+def mars_earth(init_cond_x_e, init_cond_y_e, init_cond_x_m, init_cond_y_m, t_min, t_max, h):
+    N=int((abs(t_max-t_min)/h))
+    r_earth=np.zeros(N) #matrix with positions of the Earth, and of Mars
+    r_mars = np.zeros(N)
+    r_mat=np.zeros(N)
+    t_mat=np.linspace(t_min,t_max,abs(N+1))
+    Mx_e =np.zeros([2,N+1]) #Matrices with columns velocity, position, for EARTH
+    My_e=np.zeros([2,N+1])
+    Mx_e[:,0]=init_cond_x_e #EARTH
+    My_e[:,0]=init_cond_y_e #EARTH
+    Mx_m= np.zeros([2,N+1])#Matrices with column velocity, position for MARS
+    My_m=np.zeros([2,N+1])
+    Mx_m[:,0]=init_cond_x_m #MARS
+    My_m[:,0]=init_cond_y_m #MARS
+    for i in range(0,N): #at each timestep i, calculate positions for Earth, Mars and the velocities
+    #EULER-CROMER skjer inni her
+        r_e = np.sqrt(Mx_e[:,i][1]**2+My_e[:,i][1]**2) #distance Earth-Sun
+        r_earth[i]=r_e
+        r_m = np.sqrt(Mx_m[:,i][1]**2+My_m[:,i][1]**2) #distance Mars-Sun
+        r_mars[i]=r_m
+        r=np.sqrt((Mx_e[:,i][1]-Mx_m[:,i][1])**2+(My_e[:,i][1]-My_m[:,i][1])**2) #distance Earth-Mars
+        r_mat[i]=r
+        Mx_e[:,i+1][0] = Mx_e[:,i][0]-h*4*np.pi**2*Mx_e[:,i][1]/(r_e**3)-4*h*np.pi**2*(ratio_mars_sun)*(Mx_e[:,i][1]-Mx_m[:,i][1])/r**3 #New velocity for Earth
+        My_e[:,i+1][0]=My_e[:,i][0]-h*4*np.pi**2*My_e[:,i][1]/(r_e**3)-4*h*np.pi**2*(ratio_mars_sun)*(My_e[:,i][1]-My_m[:,i][1])/r**3 #New velocity for Earth
+        Mx_m[:,i+1][0]=Mx_m[:,i][0]-h*4*np.pi**2*Mx_m[:,i][1]/(r_m**3)-4*h*np.pi**2*(ratio_earth_sun)*(Mx_m[:,i][1]-Mx_e[:,i][1])/(r**3)
+        My_m[:,i+1][0]=My_m[:,i][0]-h*4*np.pi**2*My_m[:,i][1]/(r_m**3)-4*h*np.pi**2*(ratio_earth_sun)*(My_m[:,i][1]-My_e[:,i][1])/(r**3)
+        Mx_e[:,i+1][1] = Mx_e[:,i][1]+h*Mx_e[:,i+1][0] #New x-position for Earth
+        My_e[:,i+1][1] = My_e[:,i][1]+h*My_e[:,i+1][0] #New y-position for Earth
+        Mx_m[:,i+1][1] = Mx_m[:,i][1]+h*Mx_m[:,i+1][0] #New x-position for Mars
+        My_m[:,i+1][1]=My_m[:,i][1]+h*My_m[:,i+1][0] #New y-position for Mars
+    return Mx_e, My_e, Mx_m, My_m, t_mat, r_e, r_m,r_mat, r_earth, r_mars
+
+Mx_e, My_e, Mx_m, My_m, t_mat, r_e, r_m, r_mat, r_e_vec, r_m_vec =mars_earth(wx_vec,wy_vec, vx_vec, vy_vec, t_min, t_max, h)
+
+
+----
+
+#PLOTTING FUNCTIONS
+def plott_orbits(Mx_e,My_e,Mx_m,My_m):
+    x_coord_e=Mx_e[1]
+    y_coord_e=My_e[1]
+    x_coord_m=Mx_m[1]
+    y_coord_m=My_m[1]
+    plt.plot(x_coord_e,y_coord_e)
+    plt.plot(x_coord_m,y_coord_m)
+    plt.ylabel("y (AU)")
+    plt.xlabel("x (AU)")
+    plt.plot(0, 0, marker='o', markersize=10, color="yellow")
+    plt.gca().set_aspect('equal', adjustable='box')
+    plt.show()
+
+def plott_velocity(Mx, My,t, name):
+    x_vel = Mx[0]
+    y_vel =My[0]
+    velo = np.sqrt(x_vel**2+y_vel**2)
+    plt.plot(t, velo)
+    plt.title(name +" velocity over time")
+    plt.xlabel("time (year)")
+    plt.ylabel("Speed (AU/year)")
+    plt.show()
+
+#ENERGY CALCULATIONS
+def potential_V(r):
+    #print("r: ", r)
+    #print("typen til r er ", type(r))
+    V_mat = np.zeros(len(r))
+    #print(np.zeros(len(r)))
+    for i in range(0, len(V_mat)):
+        V_mat[i] = -GMs/r[i]
+    return V_mat
+
+def kinetic(r):
+    Ek_mat = np.zeros(len(r))
+    for i in range(0, len(Ek_mat)):
+        Ek_mat[i] = 0.5*GMs/r[i]
+    return Ek_mat
+
+#ENERGY PLOT
+def plott_energies(Mx_e, My_e, Mx_m, My_m, t, r_earth, r_mars):
+    V_mat = potential_V(r_earth)
+    Ek_mat = kinetic(r_earth)
+    plt.figure("energy")
+    plt.title("Energy over time")
+    
+    plt.plot(t[:-1], V_mat, label = "$E_p$ Earth", color = "darkgreen")
+    plt.plot(t[:-1], Ek_mat, label = "$E_k$ Earth", color = "lime")
+    plt.plot(t[:-1], Ek_mat+V_mat, label = "Total E Earth", color = "lawngreen")
+    
+    V_mat = potential_V(r_mars)
+    Ek_mat = kinetic(r_mars)    
+    plt.plot(t[:-1], V_mat, label = "$E_p$ Mars", color = "indigo")
+    plt.plot(t[:-1], Ek_mat, label = "$E_k$ Mars", color = "magenta")
+    plt.plot(t[:-1], Ek_mat+V_mat, label = "Total E Mars", color = "darkorchid")
+    
+    plt.xlabel("Time (year)")
+    plt.ylabel("Energy")    
+    plt.legend()
+    plt.show()
+
+#PLOTS ORBITS, VELOCITY, AND ENERGIES OVER A 2 YEAR PERIOD
+plott_orbits(Mx_e,My_e,Mx_m,My_m)
+plott_velocity(Mx_e,My_e,t_mat, "Earth's")
+plott_velocity(Mx_m,My_m,t_mat, "Mars' ")
+plott_energies(Mx_e, My_e, Mx_m, My_m, t_mat, r_e_vec, r_m_vec)
+
+----
+t_max = 100 #100 years to see the change in trajectories if any
+Mx_e, My_e, Mx_m, My_m, t_mat, r_e, r_m, r_mat, r_e_vec, r_m_vec =mars_earth(wx_vec,wy_vec, vx_vec, vy_vec, t_min, t_max, h)
+plott_orbits(Mx_e,My_e,Mx_m,My_m)
+plott_energies(Mx_e, My_e, Mx_m, My_m, t_mat, r_e_vec, r_m_vec)
+---
+
+t_max = 20 #20 years
+ratio_earth_sun = 10**(-3)
+
+Mx_e, My_e, Mx_m, My_m, t_mat, r_e, r_m, r_mat, r_e_vec, r_m_vec =mars_earth(wx_vec,wy_vec, vx_vec, vy_vec, t_min, t_max, h)
+plott_orbits(Mx_e,My_e,Mx_m,My_m)
+plott_energies(Mx_e, My_e, Mx_m, My_m, t_mat, r_e_vec, r_m_vec)
+--
+
+t_max = 20
+ratio_earth_sun = 3*10**(-6)
+ratio_mars_sun =10**(-3)
+
+Mx_e, My_e, Mx_m, My_m, t_mat, r_e, r_m, r_mat, r_e_vec, r_m_vec =mars_earth(wx_vec,wy_vec, vx_vec, vy_vec, t_min, t_max, h)
+plott_orbits(Mx_e,My_e,Mx_m,My_m)
+plott_energies(Mx_e, My_e, Mx_m, My_m, t_mat, r_e_vec, r_m_vec)
+---
+
+t_max = 20
+ratio_earth_sun = 10**(-3)
+ratio_mars_sun =10**(-3)
+
+Mx_e, My_e, Mx_m, My_m, t_mat, r_e, r_m, r_mat, r_e_vec, r_m_vec =mars_earth(wx_vec,wy_vec, vx_vec, vy_vec, t_min, t_max, h)
+plott_orbits(Mx_e,My_e,Mx_m,My_m)
+plott_energies(Mx_e, My_e, Mx_m, My_m, t_mat, r_e_vec, r_m_vec)
+---
+
+t_max = 60
+ratio_earth_sun = 3*10**(-6)
+ratio_mars_sun = 0.027
+
+Mx_e, My_e, Mx_m, My_m, t_mat, r_e, r_m, r_mat, r_e_vec, r_m_vec =mars_earth(wx_vec,wy_vec, vx_vec, vy_vec, t_min, t_max, h)
+plott_orbits(Mx_e,My_e,Mx_m,My_m)
+plott_energies(Mx_e, My_e, Mx_m, My_m, t_mat, r_e_vec, r_m_vec)
+
